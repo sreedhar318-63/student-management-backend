@@ -44,11 +44,14 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         if existing_email:
             raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Auto-assign admin role for specific usernames
+    role = "admin" if user.username.lower() in ["sreedhar", "kirankumar"] else "user"
+
     new_user = User(
         username=user.username,
         email=user.email,
         hashed_password=hash_password(user.password),
-        role="user"
+        role=role
     )
     db.add(new_user)
     db.commit()
@@ -59,6 +62,12 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
     found = db.query(User).filter(User.username == user.username).first()
     if not found or not verify_password(user.password, found.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Auto-promote to admin on login if the username matches
+    if found.username.lower() in ["sreedhar", "kirankumar"] and found.role != "admin":
+        found.role = "admin"
+        db.commit()
+        db.refresh(found)
 
     return {
         "access_token": create_access_token(found.username),
